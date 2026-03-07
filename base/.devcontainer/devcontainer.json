@@ -1,0 +1,17 @@
+{
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "remoteUser": "dev-user",
+    "containerUser": "dev-user",
+    "updateRemoteUserUID": true,
+    "workspaceFolder": "/workspaces/content",
+    // SELinux fix: Disable SELinux label enforcement to prevent permission denied errors
+    "securityOpt": ["label=disable"],
+
+    // "mounts": ["source=/mnt/aloy,target=/mnt/aloy,type=bind"],
+
+    "postCreateCommand": "bash .devcontainer/build.sh",
+    "settings": {},
+    "extensions": []
+}

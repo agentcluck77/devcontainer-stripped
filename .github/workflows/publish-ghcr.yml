@@ -1,4 +1,4 @@
-name: Publish GHCR Image
+name: Publish GHCR Images
 
 on:
   push:
@@ -10,21 +10,141 @@ concurrency:
   group: publish-ghcr-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BASE_PLATFORMS: linux/amd64,linux/arm64
+
 jobs:
-  publish:
+  publish-base:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      base_sha_image: ${{ steps.vars.outputs.base_sha_image }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Normalize image name
-        id: prep
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare base image tags
+        id: vars
         shell: bash
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-base"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "base_sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v6
+        with:
+          context: base
+          file: base/.devcontainer/Dockerfile
+          platforms: ${{ env.BASE_PLATFORMS }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,mode=max,scope=base
+
+  publish-base-heavy:
+    needs: publish-base
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base_heavy_sha_image: ${{ steps.vars.outputs.base_heavy_sha_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare base-heavy image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-base-heavy"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "base_heavy_sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push base-heavy image
+        uses: docker/build-push-action@v6
+        with:
+          context: base-heavy
+          file: base-heavy/.devcontainer/Dockerfile
+          platforms: ${{ env.BASE_PLATFORMS }}
+          build-args: |
+            BASE_IMAGE=${{ needs.publish-base.outputs.base_sha_image }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=base-heavy
+          cache-to: type=gha,mode=max,scope=base-heavy
+
+  publish-other:
+    needs:
+      - publish-base
+      - publish-base-heavy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - template: base-heavy-nvidia
+            parent: base-heavy
+          - template: makers-gpu
+            parent: base-heavy
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -36,25 +156,46 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.prep.outputs.image }}
-          tags: |
-            type=raw,value=latest
-            type=raw,value=main
-            type=sha,format=short
+      - name: Prepare image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-${{ matrix.template }}"
 
-      - name: Build and push image
+          case "${{ matrix.parent }}" in
+            base)
+              base_image="${{ needs.publish-base.outputs.base_sha_image }}"
+              ;;
+            base-heavy)
+              base_image="${{ needs.publish-base-heavy.outputs.base_heavy_sha_image }}"
+              ;;
+            *)
+              echo "Unknown parent image '${{ matrix.parent }}'" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "base_image=${base_image}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push non-base image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: .devcontainer/Dockerfile
+          context: ${{ matrix.template }}
+          file: ${{ matrix.template }}/.devcontainer/Dockerfile
+          build-args: |
+            BASE_IMAGE=${{ steps.vars.outputs.base_image }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
           labels: |
-            ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.template }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.template }}

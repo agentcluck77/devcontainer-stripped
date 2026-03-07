@@ -1,0 +1,23 @@
+{
+    "image": "ghcr.io/agentcluck77/devcontainer-stripped-base-heavy-nvidia:main",
+    "remoteUser": "dev-user",
+    "containerUser": "dev-user",
+    "updateRemoteUserUID": true,
+    "workspaceFolder": "/workspaces/content",
+    // SELinux fix: Disable SELinux label enforcement to prevent permission denied errors
+    // This avoids duplicate mount errors that occur when using :Z or :z flags in runArgs
+    // Reference: https://github.com/loft-sh/devpod/issues/1283
+    "securityOpt": ["label=disable"],
+    // GPU access (Podman/NVIDIA CDI)
+    "runArgs": ["--device", "nvidia.com/gpu=all"],
+    "containerEnv": {
+        "NVIDIA_VISIBLE_DEVICES": "all",
+        "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
+    },
+
+    // "mounts": ["source=/mnt/aloy,target=/mnt/aloy,type=bind"],
+
+    "postCreateCommand": "sudo chown -R $(id -u):$(id -g) /home/linuxbrew/.linuxbrew && bash .devcontainer/build.sh",
+    "settings": {},
+    "extensions": []
+}

@@ -1,12 +1,12 @@
 {
-    "build": {
-        "dockerfile": "Dockerfile"
-    },
+    "image": "ghcr.io/agentcluck77/devcontainer-stripped-makers-gpu:main",
     "remoteUser": "dev-user",
     "containerUser": "dev-user",
     "updateRemoteUserUID": true,
     "workspaceFolder": "/workspaces/content",
     // SELinux fix: Disable SELinux label enforcement to prevent permission denied errors
+    // This avoids duplicate mount errors that occur when using :Z or :z flags in runArgs
+    // Reference: https://github.com/loft-sh/devpod/issues/1283
     "securityOpt": ["label=disable"],
     // GPU access (Podman/NVIDIA CDI)
     "runArgs": ["--device", "nvidia.com/gpu=all"],
@@ -17,7 +17,7 @@
 
     // "mounts": ["source=/mnt/aloy,target=/mnt/aloy,type=bind"],
 
-    "postCreateCommand": "bash .devcontainer/build.sh",
+    "postCreateCommand": "sudo chown -R $(id -u):$(id -g) /home/linuxbrew/.linuxbrew && bash .devcontainer/build.sh",
     "settings": {},
     "extensions": []
 }
