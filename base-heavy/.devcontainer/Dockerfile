@@ -28,7 +28,13 @@ RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.co
 ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/dev-user/.local/bin:/home/dev-user/miniforge3/bin:${PATH}
 
 COPY .devcontainer/Brewfile /tmp/Brewfile
-RUN brew bundle install --file /tmp/Brewfile
+RUN arch="$(uname -m)" \
+    && cp /tmp/Brewfile /tmp/Brewfile.effective \
+    && if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then \
+      # Homebrew Linux ARM64 is tier-2; plantuml frequently fails there.
+      grep -v '^[[:space:]]*brew "plantuml"' /tmp/Brewfile > /tmp/Brewfile.effective; \
+    fi \
+    && brew bundle install --file /tmp/Brewfile.effective
 
 # Install Miniforge (Conda-compatible distribution).
 RUN arch="$(uname -m)" \
