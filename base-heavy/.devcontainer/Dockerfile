@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Homebrew Linux default prefix must be writable by the installing user.
+RUN mkdir -p /home/linuxbrew/.linuxbrew \
+    && chown -R dev-user:dev-user /home/linuxbrew
+
 USER dev-user
 WORKDIR /home/dev-user
 
