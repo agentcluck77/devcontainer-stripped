@@ -1,5 +1,4 @@
 # Brewfile - Homebrew dependencies for devcontainer
-tap "homebrew/bundle"
 
 # Essential CLI tools
 brew "gh"
