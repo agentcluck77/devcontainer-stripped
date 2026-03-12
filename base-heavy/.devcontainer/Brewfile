@@ -9,7 +9,7 @@ brew "wget"
 brew "tree"
 brew "ripgrep"
 brew "bat"
-# `plantuml` is skipped in image builds on Linux ARM64 in Dockerfile.
+# `plantuml` is skipped in CI image builds in Dockerfile to avoid long source builds.
 brew "plantuml"
 brew "uv"
 brew "tmux"
