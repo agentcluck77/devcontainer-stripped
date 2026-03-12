@@ -34,15 +34,10 @@ RUN cp /tmp/Brewfile /tmp/Brewfile.effective \
     && mv /tmp/Brewfile.ci /tmp/Brewfile.effective \
     && brew bundle install --file /tmp/Brewfile.effective
 
-# Install Miniforge (Conda-compatible distribution).
-RUN arch="$(uname -m)" \
-    && case "$arch" in \
-      x86_64) miniforge_arch="x86_64" ;; \
-      aarch64|arm64) miniforge_arch="aarch64" ;; \
-      *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
-    esac \
+# Install Miniforge (Conda-compatible distribution) for amd64.
+RUN test "$(uname -m)" = "x86_64" \
     && curl -L -o /tmp/Miniforge3.sh \
-    "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-${miniforge_arch}.sh" \
+    "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh" \
     && bash /tmp/Miniforge3.sh -b -p "$HOME/miniforge3" \
     && rm -f /tmp/Miniforge3.sh \
     && "$HOME/miniforge3/bin/conda" clean -afy
