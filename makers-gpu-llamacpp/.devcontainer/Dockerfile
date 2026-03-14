@@ -17,11 +17,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN set -eux; \
     rm -rf "${LLAMA_CPP_DIR}"; \
     git clone --depth 1 --branch "${LLAMA_CPP_REF}" "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}"; \
+    cuda_stub_dir=""; \
+    for candidate in /usr/local/cuda/lib64/stubs /usr/local/cuda/targets/x86_64-linux/lib/stubs; do \
+      if [ -f "${candidate}/libcuda.so" ]; then \
+        cuda_stub_dir="${candidate}"; \
+        break; \
+      fi; \
+    done; \
+    if [ -z "${cuda_stub_dir}" ]; then \
+      echo "CUDA driver stub libcuda.so not found" >&2; \
+      exit 1; \
+    fi; \
+    ln -sf "${cuda_stub_dir}/libcuda.so" "${cuda_stub_dir}/libcuda.so.1"; \
+    export LIBRARY_PATH="${cuda_stub_dir}:${LIBRARY_PATH:-}"; \
+    export LD_LIBRARY_PATH="${cuda_stub_dir}:${LD_LIBRARY_PATH:-}"; \
     cmake -S "${LLAMA_CPP_DIR}" -B "${LLAMA_CPP_DIR}/build" \
       -G Ninja \
       -DGGML_CUDA=ON \
       -DGGML_NATIVE=OFF \
+      -DLLAMA_BUILD_TESTS=OFF \
+      -DGGML_BUILD_TESTS=OFF \
       -DCUDAToolkit_ROOT=/usr/local/cuda \
+      -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,${cuda_stub_dir}" \
+      -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath-link,${cuda_stub_dir}" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER=/usr/bin/cc \
       -DCMAKE_CXX_COMPILER=/usr/bin/c++; \
