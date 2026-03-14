@@ -117,22 +117,14 @@ jobs:
           cache-from: type=gha,scope=base-heavy
           cache-to: type=gha,mode=max,scope=base-heavy
 
-  publish-other:
-    needs:
-      - publish-base
-      - publish-base-heavy
+  publish-base-heavy-nvidia:
+    needs: publish-base-heavy
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - template: base-heavy-nvidia
-            parent: base-heavy
-          - template: makers-gpu
-            parent: base-heavy
+    outputs:
+      base_heavy_nvidia_sha_image: ${{ steps.vars.outputs.sha_image }}
 
     steps:
       - name: Check out repository
@@ -148,7 +140,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare image tags
+      - name: Prepare base-heavy-nvidia image tags
         id: vars
         shell: bash
         run: |
@@ -156,33 +148,19 @@ jobs:
           repo="${GITHUB_REPOSITORY#*/}"
           repo="${repo,,}"
           sha="${GITHUB_SHA::7}"
-          image="ghcr.io/${owner}/${repo}-${{ matrix.template }}"
-
-          case "${{ matrix.parent }}" in
-            base)
-              base_image="${{ needs.publish-base.outputs.base_sha_image }}"
-              ;;
-            base-heavy)
-              base_image="${{ needs.publish-base-heavy.outputs.base_heavy_sha_image }}"
-              ;;
-            *)
-              echo "Unknown parent image '${{ matrix.parent }}'" >&2
-              exit 1
-              ;;
-          esac
-
+          image="ghcr.io/${owner}/${repo}-base-heavy-nvidia"
           echo "image=${image}" >> "$GITHUB_OUTPUT"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
-          echo "base_image=${base_image}" >> "$GITHUB_OUTPUT"
+          echo "sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push non-base image
+      - name: Build and push base-heavy-nvidia image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.template }}
-          file: ${{ matrix.template }}/.devcontainer/Dockerfile
+          context: base-heavy-nvidia
+          file: base-heavy-nvidia/.devcontainer/Dockerfile
           platforms: linux/amd64
           build-args: |
-            BASE_IMAGE=${{ steps.vars.outputs.base_image }}
+            BASE_IMAGE=${{ needs.publish-base-heavy.outputs.base_heavy_sha_image }}
           push: true
           tags: |
             ${{ steps.vars.outputs.image }}:latest
@@ -190,5 +168,276 @@ jobs:
             ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=${{ matrix.template }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.template }}
+          cache-from: type=gha,scope=base-heavy-nvidia
+          cache-to: type=gha,mode=max,scope=base-heavy-nvidia
+
+  publish-makers-gpu:
+    needs: publish-base-heavy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      makers_gpu_sha_image: ${{ steps.vars.outputs.sha_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare makers-gpu image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-makers-gpu"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push makers-gpu image
+        uses: docker/build-push-action@v6
+        with:
+          context: makers-gpu
+          file: makers-gpu/.devcontainer/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BASE_IMAGE=${{ needs.publish-base-heavy.outputs.base_heavy_sha_image }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=makers-gpu
+          cache-to: type=gha,mode=max,scope=makers-gpu
+
+  publish-base-heavy-cudatoolkit:
+    needs: publish-base-heavy
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base_heavy_cudatoolkit_sha_image: ${{ steps.vars.outputs.sha_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare base-heavy-cudatoolkit image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-base-heavy-cudatoolkit"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push base-heavy-cudatoolkit image
+        uses: docker/build-push-action@v6
+        with:
+          context: base-heavy-cudatoolkit
+          file: base-heavy-cudatoolkit/.devcontainer/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BASE_IMAGE=${{ needs.publish-base-heavy.outputs.base_heavy_sha_image }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=base-heavy-cudatoolkit
+          cache-to: type=gha,mode=max,scope=base-heavy-cudatoolkit
+
+  publish-makers-gpu-cudatoolkit:
+    needs: publish-makers-gpu
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      makers_gpu_cudatoolkit_sha_image: ${{ steps.vars.outputs.sha_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare makers-gpu-cudatoolkit image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-makers-gpu-cudatoolkit"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push makers-gpu-cudatoolkit image
+        uses: docker/build-push-action@v6
+        with:
+          context: makers-gpu-cudatoolkit
+          file: makers-gpu-cudatoolkit/.devcontainer/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BASE_IMAGE=${{ needs.publish-makers-gpu.outputs.makers_gpu_sha_image }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=makers-gpu-cudatoolkit
+          cache-to: type=gha,mode=max,scope=makers-gpu-cudatoolkit
+
+  publish-base-heavy-llamacpp:
+    needs: publish-base-heavy-cudatoolkit
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base_heavy_llamacpp_sha_image: ${{ steps.vars.outputs.sha_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare base-heavy-llamacpp image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-base-heavy-llamacpp"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha_image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push base-heavy-llamacpp image
+        uses: docker/build-push-action@v6
+        with:
+          context: base-heavy-llamacpp
+          file: base-heavy-llamacpp/.devcontainer/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BASE_IMAGE=${{ needs.publish-base-heavy-cudatoolkit.outputs.base_heavy_cudatoolkit_sha_image }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=base-heavy-llamacpp
+          cache-to: type=gha,mode=max,scope=base-heavy-llamacpp
+
+  publish-makers-gpu-llamacpp:
+    needs: publish-makers-gpu-cudatoolkit
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare makers-gpu-llamacpp image tags
+        id: vars
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          repo="${repo,,}"
+          sha="${GITHUB_SHA::7}"
+          image="ghcr.io/${owner}/${repo}-makers-gpu-llamacpp"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push makers-gpu-llamacpp image
+        uses: docker/build-push-action@v6
+        with:
+          context: makers-gpu-llamacpp
+          file: makers-gpu-llamacpp/.devcontainer/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BASE_IMAGE=${{ needs.publish-makers-gpu-cudatoolkit.outputs.makers_gpu_cudatoolkit_sha_image }}
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=makers-gpu-llamacpp
+          cache-to: type=gha,mode=max,scope=makers-gpu-llamacpp
