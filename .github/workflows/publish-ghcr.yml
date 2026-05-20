@@ -5,12 +5,54 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      llama_cpp_ref:
+        description: llama.cpp branch, tag, or full commit SHA to build
+        required: false
+        default: master
+        type: string
 
 concurrency:
   group: publish-ghcr-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  resolve-llama-cpp:
+    runs-on: ubuntu-latest
+    outputs:
+      llama_cpp_ref: ${{ steps.resolve.outputs.llama_cpp_ref }}
+
+    steps:
+      - name: Resolve llama.cpp ref
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          repo="https://github.com/ggml-org/llama.cpp.git"
+          requested_ref="${{ github.event.inputs.llama_cpp_ref }}"
+          if [ -z "${requested_ref}" ]; then
+            requested_ref="master"
+          fi
+
+          sha="$(git ls-remote "${repo}" "refs/heads/${requested_ref}" | awk '{print $1}' | head -n 1)"
+          if [ -z "${sha}" ]; then
+            sha="$(git ls-remote "${repo}" "refs/tags/${requested_ref}^{}" | awk '{print $1}' | head -n 1)"
+          fi
+          if [ -z "${sha}" ]; then
+            sha="$(git ls-remote "${repo}" "refs/tags/${requested_ref}" | awk '{print $1}' | head -n 1)"
+          fi
+          if [ -z "${sha}" ] && [[ "${requested_ref}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            sha="${requested_ref}"
+          fi
+          if [ -z "${sha}" ]; then
+            echo "::error::Could not resolve llama.cpp ref '${requested_ref}' from ${repo}."
+            exit 1
+          fi
+
+          echo "Resolved llama.cpp ${requested_ref} to ${sha}"
+          echo "llama_cpp_ref=${sha}" >> "$GITHUB_OUTPUT"
+
   publish-base:
     runs-on: ubuntu-latest
     permissions:
@@ -336,7 +378,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=makers-gpu-cudatoolkit
 
   publish-base-heavy-llamacpp:
-    needs: publish-base-heavy-cudatoolkit
+    needs:
+      - publish-base-heavy-cudatoolkit
+      - resolve-llama-cpp
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -380,6 +424,7 @@ jobs:
           platforms: linux/amd64
           build-args: |
             BASE_IMAGE=${{ needs.publish-base-heavy-cudatoolkit.outputs.base_heavy_cudatoolkit_sha_image }}
+            LLAMA_CPP_REF=${{ needs.resolve-llama-cpp.outputs.llama_cpp_ref }}
           push: true
           tags: |
             ${{ steps.vars.outputs.image }}:latest
@@ -387,11 +432,14 @@ jobs:
             ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            devcontainer-stripped.llama-cpp.revision=${{ needs.resolve-llama-cpp.outputs.llama_cpp_ref }}
           cache-from: type=gha,scope=base-heavy-llamacpp
           cache-to: type=gha,mode=max,scope=base-heavy-llamacpp
 
   publish-makers-gpu-llamacpp:
-    needs: publish-makers-gpu-cudatoolkit
+    needs:
+      - publish-makers-gpu-cudatoolkit
+      - resolve-llama-cpp
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -432,6 +480,7 @@ jobs:
           platforms: linux/amd64
           build-args: |
             BASE_IMAGE=${{ needs.publish-makers-gpu-cudatoolkit.outputs.makers_gpu_cudatoolkit_sha_image }}
+            LLAMA_CPP_REF=${{ needs.resolve-llama-cpp.outputs.llama_cpp_ref }}
           push: true
           tags: |
             ${{ steps.vars.outputs.image }}:latest
@@ -439,5 +488,6 @@ jobs:
             ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            devcontainer-stripped.llama-cpp.revision=${{ needs.resolve-llama-cpp.outputs.llama_cpp_ref }}
           cache-from: type=gha,scope=makers-gpu-llamacpp
           cache-to: type=gha,mode=max,scope=makers-gpu-llamacpp

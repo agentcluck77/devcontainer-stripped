@@ -136,3 +136,18 @@ The GitHub Actions workflow `.github/workflows/publish-ghcr.yml` builds and push
 
 Tags published: `latest`, `main`, and short commit SHA.
 No QEMU emulation is used in CI.
+
+### Refreshing llama.cpp
+
+Use **Actions > Publish GHCR Images > Run workflow** to refresh the
+`*-llamacpp` images. By default the workflow resolves the latest
+`ggml-org/llama.cpp` `master` commit and passes that exact commit into both
+llama.cpp image builds, so the Docker cache is invalidated whenever upstream
+changes.
+
+The manual workflow input `llama_cpp_ref` can also be set to a branch, tag, or
+full commit SHA. The built image records the resolved commit at:
+
+```bash
+cat /usr/local/share/llama.cpp/commit
+```

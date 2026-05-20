@@ -16,7 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN set -eux; \
     rm -rf "${LLAMA_CPP_DIR}"; \
-    git clone --depth 1 --branch "${LLAMA_CPP_REF}" "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}"; \
+    git init "${LLAMA_CPP_DIR}"; \
+    git -C "${LLAMA_CPP_DIR}" remote add origin "${LLAMA_CPP_REPO}"; \
+    git -C "${LLAMA_CPP_DIR}" fetch --depth 1 origin "${LLAMA_CPP_REF}"; \
+    git -C "${LLAMA_CPP_DIR}" checkout --detach FETCH_HEAD; \
+    mkdir -p /usr/local/share/llama.cpp; \
+    git -C "${LLAMA_CPP_DIR}" rev-parse HEAD > /usr/local/share/llama.cpp/commit; \
     cuda_stub_dir=""; \
     for candidate in /usr/local/cuda/lib64/stubs /usr/local/cuda/targets/x86_64-linux/lib/stubs; do \
       if [ -f "${candidate}/libcuda.so" ]; then \
